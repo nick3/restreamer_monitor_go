@@ -17,5 +17,8 @@ func init() {
 		},
 	}
 
+	monitorCmd.Flags().StringP("interval", "i", "30s", "监控检查间隔")
+	monitorCmd.Flags().BoolP("verbose", "v", false, "启用详细日志")
+
 	rootCmd.AddCommand(monitorCmd)
 }
