@@ -11,6 +11,37 @@
       "enabled": false
     }
   ],
+  "relays": [
+    {
+      "name": "bilibili-to-rtmp",
+      "source": {
+        "platform": "bilibili",
+        "room_id": "76"
+      },
+      "destinations": [
+        {
+          "name": "youtube",
+          "url": "rtmp://a.rtmp.youtube.com/live2/YOUR_STREAM_KEY",
+          "protocol": "rtmp",
+          "options": {
+            "bufsize": "3000k",
+            "maxrate": "3000k"
+          }
+        },
+        {
+          "name": "twitch",
+          "url": "rtmp://live.twitch.tv/live/YOUR_STREAM_KEY",
+          "protocol": "rtmp",
+          "options": {
+            "bufsize": "6000k",
+            "maxrate": "6000k"
+          }
+        }
+      ],
+      "enabled": true,
+      "quality": "720p"
+    }
+  ],
   "interval": "30s",
   "verbose": true
 }

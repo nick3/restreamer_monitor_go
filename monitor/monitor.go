@@ -9,18 +9,42 @@ import (
 	"time"
 )
 
-// Config represents the monitor configuration
+// Config represents the application configuration
 type Config struct {
-	Rooms    []RoomConfig `json:"rooms"`
-	Interval string       `json:"interval"`
-	Verbose  bool         `json:"verbose"`
+	Rooms    []RoomConfig  `json:"rooms"`
+	Relays   []RelayConfig `json:"relays,omitempty"`
+	Interval string        `json:"interval"`
+	Verbose  bool          `json:"verbose"`
 }
 
-// RoomConfig represents a single room configuration
+// RoomConfig represents a single room configuration for monitoring
 type RoomConfig struct {
 	Platform string `json:"platform"`
 	RoomID   string `json:"room_id"`
 	Enabled  bool   `json:"enabled"`
+}
+
+// RelayConfig represents a relay configuration for streaming
+type RelayConfig struct {
+	Name         string `json:"name"`
+	Source       Source `json:"source"`
+	Destinations []Destination `json:"destinations"`
+	Enabled      bool   `json:"enabled"`
+	Quality      string `json:"quality,omitempty"` // e.g., "best", "worst", "720p"
+}
+
+// Source represents the source stream configuration
+type Source struct {
+	Platform string `json:"platform"`
+	RoomID   string `json:"room_id"`
+}
+
+// Destination represents the destination stream configuration
+type Destination struct {
+	Name     string            `json:"name"`
+	URL      string            `json:"url"`
+	Protocol string            `json:"protocol"` // rtmp, rtmps, etc.
+	Options  map[string]string `json:"options,omitempty"`
 }
 
 // Monitor manages multiple stream sources

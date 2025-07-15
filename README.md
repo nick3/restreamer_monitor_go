@@ -10,12 +10,33 @@ Restreamer Monitor Go 是一个用 Go 语言开发的多平台直播间监测与
 
 - **多平台支持**: 目前支持 Bilibili 直播平台，架构设计支持扩展其他平台
 - **实时监控**: 实时监控直播间状态，检测开播和下播
+- **直播转播**: 支持将直播流转播到多个目标平台（RTMP/RTMPS）
+- **多目标推流**: 同时推流到多个目标地址，支持不同质量设置
 - **命令行界面**: 基于 Cobra 的友好命令行界面
 - **配置灵活**: 支持 JSON 配置文件和命令行参数
-- **高性能**: 使用 Go 协程实现高并发监控
+- **高性能**: 使用 Go 协程实现高并发处理
+- **FFmpeg 集成**: 利用 FFmpeg 进行高效的流媒体处理
 - **安全可靠**: 完善的错误处理和输入验证
 
 ### 安装
+
+#### 系统要求
+
+- Go 1.21 或更高版本
+- FFmpeg（用于转播功能）
+
+```bash
+# 在 Ubuntu/Debian 上安装 FFmpeg
+sudo apt update
+sudo apt install ffmpeg
+
+# 在 macOS 上安装 FFmpeg
+brew install ffmpeg
+
+# 在 CentOS/RHEL 上安装 FFmpeg
+sudo yum install epel-release
+sudo yum install ffmpeg
+```
 
 #### 从源码编译
 
@@ -46,9 +67,30 @@ GOOS=linux GOARCH=amd64 go build -o bin/RestreamerMonitor_linux ./main/main.go
 # 监控直播间状态
 ./RestreamerMonitor monitor -c config.json -i 30s -v
 
-# 转播直播流（开发中）
-./RestreamerMonitor relay -c config.json
+# 转播直播流
+./RestreamerMonitor relay -c config.json -v
+
+# 查看版本信息
+./RestreamerMonitor --version
 ```
+
+#### 转播功能
+
+转播功能可以将源直播流转发到多个目标平台：
+
+```bash
+# 启动转播服务
+./RestreamerMonitor relay -c config.json -v
+
+# 使用特定质量设置
+./RestreamerMonitor relay -c config.json -q 720p -v
+```
+
+支持的质量设置：
+- `best`: 最佳质量（原始质量）
+- `720p`: 720p 分辨率，2000k 码率
+- `480p`: 480p 分辨率，1000k 码率
+- `worst`: 最低质量，500k 码率
 
 #### 配置文件
 
@@ -61,11 +103,37 @@ GOOS=linux GOARCH=amd64 go build -o bin/RestreamerMonitor_linux ./main/main.go
       "platform": "bilibili",
       "room_id": "123456",
       "enabled": true
-    },
+    }
+  ],
+  "relays": [
     {
-      "platform": "bilibili", 
-      "room_id": "789012",
-      "enabled": false
+      "name": "bilibili-to-multiple",
+      "source": {
+        "platform": "bilibili",
+        "room_id": "123456"
+      },
+      "destinations": [
+        {
+          "name": "youtube",
+          "url": "rtmp://a.rtmp.youtube.com/live2/YOUR_YOUTUBE_STREAM_KEY",
+          "protocol": "rtmp",
+          "options": {
+            "bufsize": "3000k",
+            "maxrate": "3000k"
+          }
+        },
+        {
+          "name": "twitch",
+          "url": "rtmp://live.twitch.tv/live/YOUR_TWITCH_STREAM_KEY",
+          "protocol": "rtmp",
+          "options": {
+            "bufsize": "6000k",
+            "maxrate": "6000k"
+          }
+        }
+      ],
+      "enabled": true,
+      "quality": "720p"
     }
   ],
   "interval": "30s",
@@ -73,12 +141,25 @@ GOOS=linux GOARCH=amd64 go build -o bin/RestreamerMonitor_linux ./main/main.go
 }
 ```
 
+配置说明：
+- `rooms`: 监控的直播间列表
+- `relays`: 转播配置列表
+- `source`: 源直播间信息
+- `destinations`: 目标推流地址列表
+- `quality`: 流质量设置
+- `options`: FFmpeg 额外参数
+
 #### 命令参数
 
 **monitor 命令:**
 - `-c, --config`: 指定配置文件路径（默认: ../config.json）
 - `-i, --interval`: 监控检查间隔（默认: 30s）
 - `-v, --verbose`: 启用详细日志输出
+
+**relay 命令:**
+- `-c, --config`: 指定配置文件路径（默认: ../config.json）
+- `-v, --verbose`: 启用详细日志输出
+- `-q, --quality`: 指定流质量（best, worst, 720p, 480p）
 
 ### API 文档
 
