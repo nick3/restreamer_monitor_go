@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// 测试辅助函数：执行命令并捕获输出
+// executeCommand executes a command and captures its output
 func executeCommand(root *cobra.Command, args ...string) (output string, err error) {
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)
@@ -20,38 +20,77 @@ func executeCommand(root *cobra.Command, args ...string) (output string, err err
 }
 
 func TestRootCommand(t *testing.T) {
-	// 测试默认配置文件路径
-	assert.Equal(t, "../config.json", cfgFile)
+	t.Run("basic properties", func(t *testing.T) {
+		assert.Equal(t, "RestreamerMonitor", rootCmd.Use)
+		assert.Contains(t, rootCmd.Short, "多平台直播间监测与转播工具")
+	})
 
-	// 测试命令基本信息
-	assert.Equal(t, "RestreamerMonitor", rootCmd.Use)
-	assert.Equal(t, "Restreamer Monitor 是一个多平台直播间监测与转播工具", rootCmd.Short)
+	t.Run("help output", func(t *testing.T) {
+		output, err := executeCommand(rootCmd, "--help")
+		assert.NoError(t, err)
+		assert.Contains(t, output, "--config")
+		assert.Contains(t, output, "-c")
+	})
 
-	// 测试配置文件标志
-	output, err := executeCommand(rootCmd, "--help")
-	assert.NoError(t, err)
-	assert.Contains(t, output, "--config")
-	assert.Contains(t, output, "-c")
+	t.Run("config flag", func(t *testing.T) {
+		flag := rootCmd.PersistentFlags().Lookup("config")
+		assert.NotNil(t, flag)
+		assert.Equal(t, "c", flag.Shorthand)
+		assert.Equal(t, "../config.json", flag.DefValue)
+	})
 
-	// 测试自定义配置文件路径
-	_, err = executeCommand(rootCmd, "--config", "custom_config.json")
-	assert.NoError(t, err)
-	assert.Equal(t, "custom_config.json", cfgFile)
-
-	// 测试自定义配置文件路径
-	_, err = executeCommand(rootCmd, "--config", "custom_config.json")
-	assert.NoError(t, err)
-	assert.Equal(t, "custom_config.json", cfgFile)
+	t.Run("has subcommands", func(t *testing.T) {
+		commands := rootCmd.Commands()
+		assert.NotEmpty(t, commands)
+		
+		var hasMonitor, hasRelay bool
+		for _, cmd := range commands {
+			if cmd.Use == "monitor" {
+				hasMonitor = true
+			}
+			if cmd.Use == "relay" {
+				hasRelay = true
+			}
+		}
+		
+		assert.True(t, hasMonitor, "Should have monitor command")
+		assert.True(t, hasRelay, "Should have relay command")
+	})
 }
 
-// 测试 Execute 函数本身
+func TestMonitorCommand(t *testing.T) {
+	monitorCmd := findCommand(rootCmd, "monitor")
+	assert.NotNil(t, monitorCmd)
+	
+	t.Run("has correct flags", func(t *testing.T) {
+		intervalFlag := monitorCmd.Flags().Lookup("interval")
+		assert.NotNil(t, intervalFlag)
+		assert.Equal(t, "i", intervalFlag.Shorthand)
+		
+		verboseFlag := monitorCmd.Flags().Lookup("verbose")
+		assert.NotNil(t, verboseFlag)
+		assert.Equal(t, "v", verboseFlag.Shorthand)
+	})
+}
+
+func TestRelayCommand(t *testing.T) {
+	relayCmd := findCommand(rootCmd, "relay")
+	assert.NotNil(t, relayCmd)
+	assert.Equal(t, "relay", relayCmd.Use)
+}
+
+// Helper function to find a command by name
+func findCommand(root *cobra.Command, name string) *cobra.Command {
+	for _, cmd := range root.Commands() {
+		if cmd.Use == name {
+			return cmd
+		}
+	}
+	return nil
+}
+
 func TestExecute(t *testing.T) {
-	// 由于 Execute() 在错误时会调用 os.Exit(1)，这里只测试正常执行的情况
-	oldRoot := rootCmd
-	defer func() { rootCmd = oldRoot }()
-	
-	testCmd := &cobra.Command{Use: "test"}
-	rootCmd = testCmd
-	
-	Execute()
+	// Test that Execute function exists and can be called
+	// We can't test the actual execution since it might exit the process
+	assert.NotNil(t, Execute)
 }

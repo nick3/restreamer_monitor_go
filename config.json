@@ -1,0 +1,16 @@
+{
+  "rooms": [
+    {
+      "platform": "bilibili",
+      "room_id": "76",
+      "enabled": true
+    },
+    {
+      "platform": "bilibili", 
+      "room_id": "123456",
+      "enabled": false
+    }
+  ],
+  "interval": "30s",
+  "verbose": true
+}

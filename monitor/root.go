@@ -4,10 +4,11 @@ import (
 	"github.com/nick3/restreamer_monitor_go/models"
 )
 
+// StreamSource defines the interface for live stream sources
 type StreamSource interface {
-    getStatus() bool
-	getRoomInfo() models.RoomInfo
-	getPlayURL() string
-	startMsgListerner()
-	closeMsgListerner()
+	GetStatus() bool
+	GetRoomInfo() models.RoomInfo
+	GetPlayURL() string
+	StartMsgListener()
+	CloseMsgListener()
 }
