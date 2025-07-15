@@ -13,8 +13,27 @@ import (
 type Config struct {
 	Rooms    []RoomConfig  `json:"rooms"`
 	Relays   []RelayConfig `json:"relays,omitempty"`
+	Telegram TelegramConfig `json:"telegram,omitempty"`
 	Interval string        `json:"interval"`
 	Verbose  bool          `json:"verbose"`
+}
+
+// TelegramConfig represents Telegram bot configuration
+type TelegramConfig struct {
+	BotToken        string   `json:"bot_token"`
+	ChatIDs         []int64  `json:"chat_ids"`
+	AdminIDs        []int64  `json:"admin_ids"`
+	Enabled         bool     `json:"enabled"`
+	EnabledCommands []string `json:"enabled_commands,omitempty"`
+	Notifications   NotificationConfig `json:"notifications,omitempty"`
+}
+
+// NotificationConfig represents notification settings
+type NotificationConfig struct {
+	SystemEvents bool `json:"system_events"`
+	MonitorEvents bool `json:"monitor_events"`
+	RelayEvents   bool `json:"relay_events"`
+	ErrorEvents   bool `json:"error_events"`
 }
 
 // RoomConfig represents a single room configuration for monitoring
@@ -47,12 +66,14 @@ type Destination struct {
 	Options  map[string]string `json:"options,omitempty"`
 }
 
-// Monitor manages multiple stream sources
+// Monitor manages multiple stream sources and Telegram notifications
 type Monitor struct {
-	config  Config
-	sources map[string]StreamSource
-	ctx     context.Context
-	cancel  context.CancelFunc
+	config            Config
+	sources           map[string]StreamSource
+	notificationMgr   interface{} // Will be *notification.NotificationManager when imported
+	ctx               context.Context
+	cancel            context.CancelFunc
+	lastStatus        map[string]bool // Track last status for notifications
 }
 
 // NewMonitor creates a new monitor instance
@@ -65,10 +86,11 @@ func NewMonitor(configFile string) (*Monitor, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	
 	monitor := &Monitor{
-		config:  config,
-		sources: make(map[string]StreamSource),
-		ctx:     ctx,
-		cancel:  cancel,
+		config:     config,
+		sources:    make(map[string]StreamSource),
+		ctx:        ctx,
+		cancel:     cancel,
+		lastStatus: make(map[string]bool),
 	}
 
 	// Initialize stream sources
@@ -183,6 +205,18 @@ func (m *Monitor) checkAllSources() {
 
 		status := source.GetStatus()
 		roomInfo := source.GetRoomInfo()
+
+		// Check if status changed
+		lastStatus, exists := m.lastStatus[key]
+		if !exists || status != lastStatus {
+			// Status changed, send notification
+			if m.notificationMgr != nil {
+				// Note: This will be properly typed when notification package is imported
+				// nm := m.notificationMgr.(*notification.NotificationManager)
+				// nm.SendLiveStatusNotification(roomInfo.RoomID, roomInfo.Platform, status, roomInfo)
+			}
+			m.lastStatus[key] = status
+		}
 
 		if m.config.Verbose || status {
 			statusStr := "offline"

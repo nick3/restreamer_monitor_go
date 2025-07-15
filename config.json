@@ -42,6 +42,32 @@
       "quality": "720p"
     }
   ],
+  "telegram": {
+    "enabled": true,
+    "bot_token": "YOUR_BOT_TOKEN_HERE",
+    "chat_ids": [
+      123456789,
+      -1001234567890
+    ],
+    "admin_ids": [
+      123456789
+    ],
+    "enabled_commands": [
+      "start",
+      "help",
+      "status",
+      "rooms",
+      "relays",
+      "stop",
+      "restart"
+    ],
+    "notifications": {
+      "system_events": true,
+      "monitor_events": true,
+      "relay_events": true,
+      "error_events": true
+    }
+  },
   "interval": "30s",
   "verbose": true
 }

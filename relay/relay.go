@@ -14,14 +14,15 @@ import (
 	"github.com/nick3/restreamer_monitor_go/monitor"
 )
 
-// RelayManager manages multiple stream relays
+// RelayManager manages multiple stream relays with notifications
 type RelayManager struct {
-	config   monitor.Config
-	relays   map[string]*StreamRelay
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
-	mu       sync.RWMutex
+	config          monitor.Config
+	relays          map[string]*StreamRelay
+	notificationMgr interface{} // Will be *notification.NotificationManager when imported
+	ctx             context.Context
+	cancel          context.CancelFunc
+	wg              sync.WaitGroup
+	mu              sync.RWMutex
 }
 
 // StreamRelay represents a single stream relay instance
