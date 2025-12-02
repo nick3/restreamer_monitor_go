@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,11 +71,11 @@ func TestFormatLiveStartNotification(t *testing.T) {
 				}
 
 				// Check for required elements in message
-				if tt.roomInfo.UName != "" && !contains(message, tt.roomInfo.UName) {
+				if tt.roomInfo.UName != "" && !strings.Contains(message, tt.roomInfo.UName) {
 					t.Errorf("Message should contain UName %s", tt.roomInfo.UName)
 				}
 
-				if tt.roomInfo.Title != "" && !contains(message, tt.roomInfo.Title) {
+				if tt.roomInfo.Title != "" && !strings.Contains(message, tt.roomInfo.Title) {
 					t.Errorf("Message should contain Title %s", tt.roomInfo.Title)
 				}
 
@@ -135,11 +136,11 @@ func TestFormatLiveEndNotification(t *testing.T) {
 				}
 
 				// Check for required elements in message
-				if tt.roomInfo.UName != "" && !contains(message, tt.roomInfo.UName) {
+				if tt.roomInfo.UName != "" && !strings.Contains(message, tt.roomInfo.UName) {
 					t.Errorf("Message should contain UName %s", tt.roomInfo.UName)
 				}
 
-				if tt.roomInfo.UID != "" && !contains(message, tt.roomInfo.UID) {
+				if tt.roomInfo.UID != "" && !strings.Contains(message, tt.roomInfo.UID) {
 					t.Errorf("Message should contain UID %s", tt.roomInfo.UID)
 				}
 
@@ -163,33 +164,19 @@ func TestFormatStatusNotification(t *testing.T) {
 		t.Error("Expected non-empty message")
 	}
 
-	if !contains(message, status) {
+	if !strings.Contains(message, status) {
 		t.Errorf("Message should contain status %s", status)
 	}
 
 	for key, value := range details {
-		if !contains(message, key) {
+		if !strings.Contains(message, key) {
 			t.Errorf("Message should contain detail key %s", key)
 		}
 		strValue := fmt.Sprintf("%v", value)
-		if !contains(message, strValue) {
+		if !strings.Contains(message, strValue) {
 			t.Errorf("Message should contain detail value %s", strValue)
 		}
 	}
 
 	t.Logf("Formatted message:\n%s", message)
-}
-
-// Helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsInner(s, substr)))
-}
-
-func containsInner(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

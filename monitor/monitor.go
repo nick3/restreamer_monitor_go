@@ -41,6 +41,27 @@ type NotificationConfig struct {
 	ErrorEvents   bool `json:"error_events"`
 }
 
+// ToNotificationConfig converts TelegramConfig to notification.Config
+// This method centralizes the configuration conversion logic and avoids
+// manual field copying in controllers or other components.
+func (tc TelegramConfig) ToNotificationConfig() notification.Config {
+	return notification.Config{
+		Telegram: telegram.Config{
+			BotToken:        tc.BotToken,
+			ChatIDs:         tc.ChatIDs,
+			AdminIDs:        tc.AdminIDs,
+			Enabled:         tc.Enabled,
+			EnabledCommands: tc.EnabledCommands,
+		},
+		Notifications: notification.NotificationConfig{
+			SystemEvents:  tc.Notifications.SystemEvents,
+			MonitorEvents: tc.Notifications.MonitorEvents,
+			RelayEvents:   tc.Notifications.RelayEvents,
+			ErrorEvents:   tc.Notifications.ErrorEvents,
+		},
+	}
+}
+
 // RoomConfig represents a single room configuration for monitoring
 type RoomConfig struct {
 	Platform string `json:"platform"`

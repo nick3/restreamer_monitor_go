@@ -76,22 +76,8 @@ func NewServiceController(configFile string) (*ServiceController, error) {
 
 	// Initialize notification manager
 	if config.Telegram.Enabled {
-		// Convert monitor.Config to notification.Config
-		nmConfig := notification.Config{
-			Telegram: telegram.Config{
-				BotToken:        config.Telegram.BotToken,
-				ChatIDs:         config.Telegram.ChatIDs,
-				AdminIDs:        config.Telegram.AdminIDs,
-				Enabled:         config.Telegram.Enabled,
-				EnabledCommands: config.Telegram.EnabledCommands,
-			},
-			Notifications: notification.NotificationConfig{
-				SystemEvents:  config.Telegram.Notifications.SystemEvents,
-				MonitorEvents: config.Telegram.Notifications.MonitorEvents,
-				RelayEvents:   config.Telegram.Notifications.RelayEvents,
-				ErrorEvents:   config.Telegram.Notifications.ErrorEvents,
-			},
-		}
+		// Use the centralized configuration conversion method
+		nmConfig := config.Telegram.ToNotificationConfig()
 		sc.notificationMgr, err = notification.NewNotificationManager(nmConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create notification manager: %w", err)

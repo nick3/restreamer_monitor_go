@@ -118,10 +118,6 @@ func (b *Bot) SendNotification(event NotificationEvent) {
 	message := b.formatNotification(event)
 
 	for _, chatID := range b.config.ChatIDs {
-		if len(message) > 200 {
-		} else {
-		}
-
 		msg := tgbotapi.NewMessage(chatID, message)
 		msg.ParseMode = tgbotapi.ModeMarkdown
 
@@ -139,7 +135,6 @@ func (b *Bot) SendNotification(event NotificationEvent) {
 					"failed_method": "Send(plain)",
 				}).Error("Failed to send notification without markdown")
 			}
-		} else {
 		}
 	}
 
@@ -164,10 +159,6 @@ func (b *Bot) SendNotificationWithPhoto(event NotificationEvent, photoURL string
 	}
 
 	for _, chatID := range b.config.ChatIDs {
-		if len(event.Message) > 200 {
-		} else {
-		}
-
 		// Create photo message with caption
 		msg := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(photoURL))
 		msg.Caption = event.Message
@@ -188,7 +179,6 @@ func (b *Bot) SendNotificationWithPhoto(event NotificationEvent, photoURL string
 					"failed_method": "Send(text_fallback)",
 				}).Error("Failed to send fallback text notification")
 			}
-		} else {
 		}
 	}
 
