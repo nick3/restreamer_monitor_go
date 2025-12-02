@@ -19,7 +19,6 @@ import (
 type RelayManager struct {
 	config          monitor.Config
 	relays          map[string]*StreamRelay
-	notificationMgr interface{} // Will be *notification.NotificationManager when imported
 	ctx             context.Context
 	cancel          context.CancelFunc
 	wg              sync.WaitGroup
@@ -327,7 +326,7 @@ func (sr *StreamRelay) stopAllProcesses() {
 	for name, cmd := range sr.processes {
 		if cmd != nil && cmd.Process != nil {
 			sr.logger.WithField("process_name", name).Debug("Stopping relay process")
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}
 

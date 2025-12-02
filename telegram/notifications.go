@@ -60,7 +60,7 @@ func FormatLiveStartNotification(roomInfo models.RoomInfo) (string, string) {
 	if roomInfo.Title != "" {
 		message += fmt.Sprintf("🎥 直播标题：%s\n\n", escapedTitle)
 	} else {
-		message += fmt.Sprintf("🎥 直播标题：未设置\n\n")
+		message += "🎥 直播标题：未设置\n\n"
 	}
 
 	// Live start time
