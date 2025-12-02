@@ -48,9 +48,6 @@ USER appuser
 # Default config path
 ENV CONFIG_PATH=/app/config/config.json
 
-# Expose potential ports (if needed in future)
-# EXPOSE 8080
-
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD pgrep -x RestreamerMonitor || exit 1
