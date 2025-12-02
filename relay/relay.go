@@ -326,7 +326,9 @@ func (sr *StreamRelay) stopAllProcesses() {
 	for name, cmd := range sr.processes {
 		if cmd != nil && cmd.Process != nil {
 			sr.logger.WithField("process_name", name).Debug("Stopping relay process")
-			_ = cmd.Process.Kill()
+			if err := cmd.Process.Kill(); err != nil {
+				sr.logger.WithError(err).WithField("process_name", name).Warn("Failed to kill process")
+			}
 		}
 	}
 

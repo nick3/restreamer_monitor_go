@@ -153,9 +153,9 @@ func TestFormatLiveEndNotification(t *testing.T) {
 func TestFormatStatusNotification(t *testing.T) {
 	status := "System running"
 	details := map[string]interface{}{
-		"room_count": 5,
-		"uptime":     "2h 30m",
-		"memory":     "256 MB",
+		"roomcount": 5, // Use keys without special chars for basic test
+		"uptime":    "2h 30m",
+		"memory":    "256 MB",
 	}
 
 	message := FormatStatusNotification(status, details)
@@ -169,8 +169,10 @@ func TestFormatStatusNotification(t *testing.T) {
 	}
 
 	for key, value := range details {
-		if !strings.Contains(message, key) {
-			t.Errorf("Message should contain detail key %s", key)
+		// Key might be escaped, so check for the escaped version too
+		escapedKey := escapeMarkdown(key)
+		if !strings.Contains(message, key) && !strings.Contains(message, escapedKey) {
+			t.Errorf("Message should contain detail key %s (or escaped: %s)", key, escapedKey)
 		}
 		strValue := fmt.Sprintf("%v", value)
 		if !strings.Contains(message, strValue) {
@@ -179,4 +181,29 @@ func TestFormatStatusNotification(t *testing.T) {
 	}
 
 	t.Logf("Formatted message:\n%s", message)
+}
+
+func TestFormatStatusNotification_WithSpecialChars(t *testing.T) {
+	// Test that special MarkdownV2 characters are properly escaped
+	status := "System [running] with *special* chars_here"
+	details := map[string]interface{}{
+		"test_key": "value",
+		"key-2":    100,
+	}
+
+	message := FormatStatusNotification(status, details)
+
+	if message == "" {
+		t.Error("Expected non-empty message")
+	}
+
+	// Verify special characters are escaped
+	if strings.Contains(message, "[running]") {
+		t.Error("Square brackets should be escaped")
+	}
+	if strings.Contains(message, "*special*") && !strings.Contains(message, "\\*special\\*") {
+		t.Error("Asterisks should be escaped in status text")
+	}
+
+	t.Logf("Formatted message with special chars:\n%s", message)
 }

@@ -122,12 +122,16 @@ func FormatLiveEndNotification(roomInfo models.RoomInfo) string {
 
 // FormatStatusNotification formats a general status notification
 func FormatStatusNotification(status string, details map[string]interface{}) string {
-	message := fmt.Sprintf("📊 *状态更新*\n\n%s\n\n", status)
+	// Escape status to prevent MarkdownV2 parsing errors
+	escapedStatus := escapeMarkdown(status)
+	message := fmt.Sprintf("📊 *状态更新*\n\n%s\n\n", escapedStatus)
 
 	if len(details) > 0 {
 		message += "*详细信息：*\n"
 		for key, value := range details {
-			message += fmt.Sprintf("• *%s*: `%v`\n", key, value)
+			// Escape key to prevent MarkdownV2 parsing errors
+			escapedKey := escapeMarkdown(key)
+			message += fmt.Sprintf("• *%s*: `%v`\n", escapedKey, value)
 		}
 	}
 
