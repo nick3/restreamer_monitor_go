@@ -272,6 +272,13 @@ func (m *Monitor) GetConfig() Config {
 // checkAllSources checks the status of all configured sources
 func (m *Monitor) checkAllSources() {
 	for key, source := range m.sources {
+		// Check if context is cancelled before processing each source
+		select {
+		case <-m.ctx.Done():
+			return
+		default:
+		}
+
 		if m.config.Verbose {
 			m.logger.Debugf("Checking status for %s", key)
 		}
