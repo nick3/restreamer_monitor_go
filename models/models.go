@@ -14,4 +14,5 @@ type RoomInfo struct {
 	Keyframe    string    `json:"keyframe"`
 	Title       string    `json:"title"`
 	StartTime   time.Time `json:"start_time"`
+	EndTime     time.Time `json:"end_time"` // 新增：下播时间
 }

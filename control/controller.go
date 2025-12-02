@@ -3,15 +3,16 @@ package control
 import (
 	"context"
 	"fmt"
-	"log"
 	"runtime"
 	"sync"
 	"time"
 
+	"github.com/nick3/restreamer_monitor_go/logger"
 	"github.com/nick3/restreamer_monitor_go/monitor"
 	"github.com/nick3/restreamer_monitor_go/notification"
 	"github.com/nick3/restreamer_monitor_go/relay"
 	"github.com/nick3/restreamer_monitor_go/telegram"
+	"github.com/sirupsen/logrus"
 )
 
 // ServiceController manages all services and provides Telegram bot control
@@ -26,6 +27,7 @@ type ServiceController struct {
 	mu              sync.RWMutex
 	startTime       time.Time
 	status          ServiceStatus
+	logger          *logrus.Entry
 }
 
 // ServiceStatus represents the status of all services
@@ -66,11 +68,31 @@ func NewServiceController(configFile string) (*ServiceController, error) {
 		ctx:       ctx,
 		cancel:    cancel,
 		startTime: time.Now(),
+		logger: logger.GetLogger(map[string]interface{}{
+			"component": "control",
+			"module":    "controller",
+		}),
 	}
 
 	// Initialize notification manager
 	if config.Telegram.Enabled {
-		sc.notificationMgr, err = notification.NewNotificationManager(config)
+		// Convert monitor.Config to notification.Config
+		nmConfig := notification.Config{
+			Telegram: telegram.Config{
+				BotToken:        config.Telegram.BotToken,
+				ChatIDs:         config.Telegram.ChatIDs,
+				AdminIDs:        config.Telegram.AdminIDs,
+				Enabled:         config.Telegram.Enabled,
+				EnabledCommands: config.Telegram.EnabledCommands,
+			},
+			Notifications: notification.NotificationConfig{
+				SystemEvents:  config.Telegram.Notifications.SystemEvents,
+				MonitorEvents: config.Telegram.Notifications.MonitorEvents,
+				RelayEvents:   config.Telegram.Notifications.RelayEvents,
+				ErrorEvents:   config.Telegram.Notifications.ErrorEvents,
+			},
+		}
+		sc.notificationMgr, err = notification.NewNotificationManager(nmConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create notification manager: %w", err)
 		}
@@ -85,7 +107,7 @@ func (sc *ServiceController) Start() error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	log.Println("Starting service controller...")
+	sc.logger.Info("Starting service controller...")
 
 	// Start notification manager first
 	if sc.notificationMgr != nil {
@@ -110,7 +132,7 @@ func (sc *ServiceController) Start() error {
 		var err error
 		sc.monitorService, err = monitor.NewMonitor("")
 		if err != nil {
-			log.Printf("Failed to create monitor service: %v", err)
+			sc.logger.WithError(err).Error("Failed to create monitor service")
 			sc.status.Monitor.Error = err.Error()
 		} else {
 			go func() {
@@ -118,7 +140,7 @@ func (sc *ServiceController) Start() error {
 				sc.status.Monitor.StartTime = time.Now()
 				
 				if err := sc.monitorService.Run(); err != nil {
-					log.Printf("Monitor service error: %v", err)
+					sc.logger.WithError(err).Error("Monitor service error")
 					sc.status.Monitor.Error = err.Error()
 					sc.status.Monitor.Running = false
 					
@@ -135,18 +157,18 @@ func (sc *ServiceController) Start() error {
 		var err error
 		sc.relayManager, err = relay.NewRelayManager("")
 		if err != nil {
-			log.Printf("Failed to create relay manager: %v", err)
+			sc.logger.WithError(err).Error("Failed to create relay manager")
 			sc.status.Relay.Error = err.Error()
 		} else {
 			go func() {
 				sc.status.Relay.Running = true
 				sc.status.Relay.StartTime = time.Now()
-				
+
 				if err := sc.relayManager.Run(); err != nil {
-					log.Printf("Relay manager error: %v", err)
+					sc.logger.WithError(err).Error("Relay manager error")
 					sc.status.Relay.Error = err.Error()
 					sc.status.Relay.Running = false
-					
+
 					if sc.notificationMgr != nil {
 						sc.notificationMgr.SendErrorNotification("转播服务错误", err.Error())
 					}
@@ -163,7 +185,7 @@ func (sc *ServiceController) Start() error {
 		sc.notificationMgr.SendSystemNotification("🚀 系统启动完成")
 	}
 
-	log.Println("Service controller started successfully")
+	sc.logger.Info("Service controller started successfully")
 	return nil
 }
 
@@ -172,7 +194,7 @@ func (sc *ServiceController) Stop() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	log.Println("Stopping service controller...")
+	sc.logger.Info("Stopping service controller...")
 
 	// Send shutdown notification
 	if sc.notificationMgr != nil {
@@ -196,7 +218,7 @@ func (sc *ServiceController) Stop() {
 	}
 
 	sc.cancel()
-	log.Println("Service controller stopped")
+	sc.logger.Info("Service controller stopped")
 }
 
 // setupBotHandlers sets up Telegram bot command handlers
@@ -409,7 +431,7 @@ func (sc *ServiceController) restartSystem() {
 
 	// Restart all services
 	if err := sc.Start(); err != nil {
-		log.Printf("Failed to restart system: %v", err)
+		sc.logger.WithError(err).Error("Failed to restart system")
 		if sc.notificationMgr != nil {
 			sc.notificationMgr.SendErrorNotification("系统重启失败", err.Error())
 		}

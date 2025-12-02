@@ -3,11 +3,12 @@ package telegram
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/nick3/restreamer_monitor_go/logger"
+	"github.com/sirupsen/logrus"
 )
 
 // Bot represents a Telegram bot instance
@@ -17,6 +18,7 @@ type Bot struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	listeners map[string][]NotificationListener
+	logger    *logrus.Entry
 }
 
 // Config represents Telegram bot configuration
@@ -55,17 +57,18 @@ func NewBot(config Config) (*Bot, error) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	bot := &Bot{
 		api:       api,
 		config:    config,
 		ctx:       ctx,
 		cancel:    cancel,
 		listeners: make(map[string][]NotificationListener),
+		logger:    logger.GetLogger(map[string]interface{}{"component": "telegram", "module": "bot"}),
 	}
 
-	log.Printf("Telegram bot authorized on account %s", api.Self.UserName)
-	
+	bot.logger.Infof("Telegram bot authorized on account %s", api.Self.UserName)
+
 	return bot, nil
 }
 
@@ -75,8 +78,8 @@ func (b *Bot) Start() error {
 		return fmt.Errorf("telegram bot is disabled")
 	}
 
-	log.Println("Starting Telegram bot...")
-	
+	b.logger.Info("Starting Telegram bot...")
+
 	// Send startup notification
 	b.SendNotification(NotificationEvent{
 		Type:      "system",
@@ -93,7 +96,7 @@ func (b *Bot) Start() error {
 // Stop stops the bot
 func (b *Bot) Stop() {
 	if b.cancel != nil {
-		log.Println("Stopping Telegram bot...")
+		b.logger.Info("Stopping Telegram bot...")
 		
 		// Send shutdown notification
 		b.SendNotification(NotificationEvent{
@@ -113,16 +116,163 @@ func (b *Bot) SendNotification(event NotificationEvent) {
 	}
 
 	message := b.formatNotification(event)
-	
+
 	for _, chatID := range b.config.ChatIDs {
+		if len(message) > 200 {
+		} else {
+		}
+
 		msg := tgbotapi.NewMessage(chatID, message)
 		msg.ParseMode = tgbotapi.ModeMarkdown
-		
+
 		if _, err := b.api.Send(msg); err != nil {
-			log.Printf("Failed to send notification to chat %d: %v", chatID, err)
+			b.logger.WithError(err).WithFields(logrus.Fields{
+				"chat_id": chatID,
+				"failed_method": "Send(markdown)",
+			}).Error("Failed to send notification")
+
+			// Try without Markdown if it fails
+			msg.ParseMode = ""
+			if _, err := b.api.Send(msg); err != nil {
+				b.logger.WithError(err).WithFields(logrus.Fields{
+					"chat_id": chatID,
+					"failed_method": "Send(plain)",
+				}).Error("Failed to send notification without markdown")
+			}
+		} else {
 		}
 	}
-	
+
+	// Notify listeners
+	if listeners, exists := b.listeners[event.Type]; exists {
+		for _, listener := range listeners {
+			listener(event)
+		}
+	}
+}
+
+// SendNotificationWithPhoto sends a notification with a photo to all configured chat IDs
+func (b *Bot) SendNotificationWithPhoto(event NotificationEvent, photoURL string) {
+	if !b.config.Enabled {
+		return
+	}
+
+	if photoURL == "" {
+		// Fallback to text-only notification if no photo URL
+		b.SendNotification(event)
+		return
+	}
+
+	for _, chatID := range b.config.ChatIDs {
+		if len(event.Message) > 200 {
+		} else {
+		}
+
+		// Create photo message with caption
+		msg := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(photoURL))
+		msg.Caption = event.Message
+		msg.ParseMode = tgbotapi.ModeMarkdown
+
+		if _, err := b.api.Send(msg); err != nil {
+			b.logger.WithError(err).WithFields(logrus.Fields{
+				"chat_id": chatID,
+				"failed_method": "SendPhoto",
+			}).Error("Failed to send photo notification")
+
+			// Fallback to text-only notification
+			textMsg := tgbotapi.NewMessage(chatID, event.Message)
+			textMsg.ParseMode = tgbotapi.ModeMarkdown
+			if _, err := b.api.Send(textMsg); err != nil {
+				b.logger.WithError(err).WithFields(logrus.Fields{
+					"chat_id": chatID,
+					"failed_method": "Send(text_fallback)",
+				}).Error("Failed to send fallback text notification")
+			}
+		} else {
+		}
+	}
+
+	// Notify listeners
+	if listeners, exists := b.listeners[event.Type]; exists {
+		for _, listener := range listeners {
+			listener(event)
+		}
+	}
+}
+
+// SendNotificationToAdmins sends a notification to all configured admin IDs
+func (b *Bot) SendNotificationToAdmins(event NotificationEvent) {
+	if !b.config.Enabled {
+		return
+	}
+
+	message := b.formatNotification(event)
+
+	for _, chatID := range b.config.AdminIDs {
+		msg := tgbotapi.NewMessage(chatID, message)
+		msg.ParseMode = tgbotapi.ModeMarkdown
+
+		if _, err := b.api.Send(msg); err != nil {
+			b.logger.WithError(err).WithFields(logrus.Fields{
+				"admin_id": chatID,
+				"failed_method": "Send(markdown)",
+			}).Error("Failed to send notification to admin")
+
+			// Try without Markdown if it fails
+			msg.ParseMode = ""
+			if _, err := b.api.Send(msg); err != nil {
+				b.logger.WithError(err).WithFields(logrus.Fields{
+					"admin_id": chatID,
+					"failed_method": "Send(plain)",
+				}).Error("Failed to send notification without markdown to admin")
+			}
+		}
+	}
+
+	// Notify listeners
+	if listeners, exists := b.listeners[event.Type]; exists {
+		for _, listener := range listeners {
+			listener(event)
+		}
+	}
+}
+
+// SendNotificationWithPhotoToAdmins sends a notification with a photo to all configured admin IDs
+func (b *Bot) SendNotificationWithPhotoToAdmins(event NotificationEvent, photoURL string) {
+	if !b.config.Enabled {
+		return
+	}
+
+	if photoURL == "" {
+		// Fallback to text-only notification if no photo URL
+		b.SendNotificationToAdmins(event)
+		return
+	}
+
+	for _, chatID := range b.config.AdminIDs {
+		// Create photo message with caption
+		msg := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(photoURL))
+		msg.Caption = event.Message
+		msg.ParseMode = tgbotapi.ModeMarkdown
+
+		if _, err := b.api.Send(msg); err != nil {
+			b.logger.WithError(err).WithFields(logrus.Fields{
+				"admin_id": chatID,
+				"failed_method": "SendPhoto",
+			}).Error("Failed to send photo notification to admin")
+
+			// Fallback to text-only notification
+			textMsg := tgbotapi.NewMessage(chatID, event.Message)
+			textMsg.ParseMode = tgbotapi.ModeMarkdown
+			if _, err := b.api.Send(textMsg); err != nil {
+				b.logger.WithError(err).WithFields(logrus.Fields{
+					"admin_id": chatID,
+					"failed_method": "Send(text_fallback)",
+				}).Error("Failed to send fallback text notification to admin")
+			}
+		}
+	}
+
 	// Notify listeners
 	if listeners, exists := b.listeners[event.Type]; exists {
 		for _, listener := range listeners {
@@ -134,21 +284,13 @@ func (b *Bot) SendNotification(event NotificationEvent) {
 // formatNotification formats a notification event into a readable message
 func (b *Bot) formatNotification(event NotificationEvent) string {
 	var message strings.Builder
-	
+
 	// Add timestamp
-	message.WriteString(fmt.Sprintf("*%s*\n", event.Timestamp.Format("2006-01-02 15:04:05")))
-	
-	// Add message
+	message.WriteString(fmt.Sprintf("*%s*\n\n", event.Timestamp.Format("2006-01-02 15:04:05")))
+
+	// Add message (main content already includes all key information)
 	message.WriteString(event.Message)
-	
-	// Add additional data if present
-	if len(event.Data) > 0 {
-		message.WriteString("\n\n*详细信息:*\n")
-		for key, value := range event.Data {
-			message.WriteString(fmt.Sprintf("• %s: `%v`\n", key, value))
-		}
-	}
-	
+
 	return message.String()
 }
 
@@ -165,6 +307,11 @@ func (b *Bot) handleCommands() {
 			return
 		case update := <-updates:
 			if update.Message == nil {
+				continue
+			}
+
+			// Only process commands, ignore regular messages
+			if !update.Message.IsCommand() {
 				continue
 			}
 
@@ -243,9 +390,9 @@ func (b *Bot) isCommandEnabled(command string) bool {
 func (b *Bot) sendMessage(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = tgbotapi.ModeMarkdown
-	
+
 	if _, err := b.api.Send(msg); err != nil {
-		log.Printf("Failed to send message to chat %d: %v", chatID, err)
+		b.logger.WithError(err).WithField("chat_id", chatID).Error("Failed to send message")
 	}
 }
 

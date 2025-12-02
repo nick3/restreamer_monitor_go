@@ -3,14 +3,14 @@ package notification
 import (
 	"testing"
 
-	"github.com/nick3/restreamer_monitor_go/monitor"
+	"github.com/nick3/restreamer_monitor_go/telegram"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewNotificationManager(t *testing.T) {
 	t.Run("telegram disabled", func(t *testing.T) {
-		config := monitor.Config{
-			Telegram: monitor.TelegramConfig{
+		config := Config{
+			Telegram: telegram.Config{
 				Enabled: false,
 			},
 		}
@@ -22,8 +22,8 @@ func TestNewNotificationManager(t *testing.T) {
 	})
 
 	t.Run("telegram enabled with invalid token", func(t *testing.T) {
-		config := monitor.Config{
-			Telegram: monitor.TelegramConfig{
+		config := Config{
+			Telegram: telegram.Config{
 				Enabled:  true,
 				BotToken: "invalid_token",
 				ChatIDs:  []int64{123456789},
@@ -37,15 +37,15 @@ func TestNewNotificationManager(t *testing.T) {
 }
 
 func TestNotificationManager_Notifications(t *testing.T) {
-	config := monitor.Config{
-		Telegram: monitor.TelegramConfig{
+	config := Config{
+		Telegram: telegram.Config{
 			Enabled: false, // Disabled to avoid actual API calls
-			Notifications: monitor.NotificationConfig{
-				SystemEvents:  true,
-				MonitorEvents: true,
-				RelayEvents:   true,
-				ErrorEvents:   true,
-			},
+		},
+		Notifications: NotificationConfig{
+			SystemEvents:  true,
+			MonitorEvents: true,
+			RelayEvents:   true,
+			ErrorEvents:   true,
 		},
 	}
 
@@ -93,15 +93,15 @@ func TestNotificationManager_Notifications(t *testing.T) {
 }
 
 func TestNotificationManager_Config(t *testing.T) {
-	config := monitor.Config{
-		Telegram: monitor.TelegramConfig{
+	config := Config{
+		Telegram: telegram.Config{
 			Enabled: false,
-			Notifications: monitor.NotificationConfig{
-				SystemEvents:  false,
-				MonitorEvents: true,
-				RelayEvents:   false,
-				ErrorEvents:   true,
-			},
+		},
+		Notifications: NotificationConfig{
+			SystemEvents:  false,
+			MonitorEvents: true,
+			RelayEvents:   false,
+			ErrorEvents:   true,
 		},
 	}
 
@@ -135,8 +135,8 @@ func TestNotificationManager_Config(t *testing.T) {
 }
 
 func TestNotificationManager_Methods(t *testing.T) {
-	config := monitor.Config{
-		Telegram: monitor.TelegramConfig{
+	config := Config{
+		Telegram: telegram.Config{
 			Enabled: false,
 		},
 	}
