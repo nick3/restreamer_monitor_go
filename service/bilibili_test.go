@@ -2,6 +2,8 @@ package service
 
 import (
 	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,7 +43,7 @@ func TestNewBilibiliService(t *testing.T) {
 	t.Run("valid room ID", func(t *testing.T) {
 		roomID := "123"
 		service, err := NewBilibiliService(roomID)
-		
+
 		require.NoError(t, err)
 		assert.Equal(t, roomID, service.RoomId)
 		assert.NotNil(t, service.Client)
@@ -51,7 +53,7 @@ func TestNewBilibiliService(t *testing.T) {
 	t.Run("invalid room ID", func(t *testing.T) {
 		roomID := "invalid123"
 		service, err := NewBilibiliService(roomID)
-		
+
 		assert.Error(t, err)
 		assert.Nil(t, service)
 	})
@@ -60,7 +62,7 @@ func TestNewBilibiliService(t *testing.T) {
 func TestBilibiliService_GetBilibiliRealRoomId(t *testing.T) {
 	service, err := NewBilibiliService("76")
 	require.NoError(t, err)
-	
+
 	roomId, err := service.GetBilibiliRealRoomId()
 	if err != nil {
 		t.Logf("GetBilibiliRealRoomId error: %v", err)
@@ -73,7 +75,7 @@ func TestBilibiliService_GetBilibiliRealRoomId(t *testing.T) {
 func TestBilibiliService_GetBilibiliLiveStatus(t *testing.T) {
 	service, err := NewBilibiliService("76")
 	require.NoError(t, err)
-	
+
 	isLive, err := service.GetBilibiliLiveStatus()
 	if err != nil {
 		t.Logf("GetBilibiliLiveStatus error: %v", err)
@@ -81,4 +83,62 @@ func TestBilibiliService_GetBilibiliLiveStatus(t *testing.T) {
 		return
 	}
 	t.Logf("Live status: %v", isLive)
+}
+
+// TestGetRoomBaseInfo tests the GetRoomBaseInfo method
+func TestGetRoomBaseInfo(t *testing.T) {
+	// Test with Bilibili's official live room
+	roomID := "3"
+
+	svc, err := NewBilibiliService(roomID)
+	if err != nil {
+		t.Fatalf("Failed to create BilibiliService: %v", err)
+	}
+
+	baseInfo, err := svc.GetRoomBaseInfo()
+	if err != nil {
+		t.Fatalf("Failed to get room base info: %v", err)
+	}
+
+	if baseInfo.UID == "" {
+		t.Error("Expected non-empty UID")
+	}
+
+	if baseInfo.UName == "" {
+		t.Error("Expected non-empty UName")
+	}
+
+	t.Logf("UID: %s, UName: %s", baseInfo.UID, baseInfo.UName)
+}
+
+// TestGetRoomInfo tests the GetRoomInfo method
+func TestGetRoomInfo(t *testing.T) {
+	roomID := "3"
+
+	svc, err := NewBilibiliService(roomID)
+	if err != nil {
+		t.Fatalf("Failed to create BilibiliService: %v", err)
+	}
+
+	roomInfo, err := svc.GetRoomInfo()
+	if err != nil {
+		t.Fatalf("Failed to get room info: %v", err)
+	}
+
+	if roomInfo.Title == "" {
+		t.Error("Expected non-empty Title")
+	}
+
+	// UserCover and Keyframe might be empty if the room is not live
+	t.Logf("Title: %s", roomInfo.Title)
+	t.Logf("UserCover: %s", roomInfo.UserCover)
+	t.Logf("Keyframe: %s", roomInfo.Keyframe)
+	t.Logf("LiveStart: %v", roomInfo.LiveStart)
+
+	// If LiveStart is not zero, check if it's a reasonable time
+	if !roomInfo.LiveStart.IsZero() {
+		if roomInfo.LiveStart.After(time.Now()) {
+			t.Error("LiveStart should not be in the future")
+		}
+	}
 }

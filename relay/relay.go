@@ -4,39 +4,41 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/nick3/restreamer_monitor_go/logger"
 	"github.com/nick3/restreamer_monitor_go/monitor"
+	"github.com/sirupsen/logrus"
 )
 
 // RelayManager manages multiple stream relays with notifications
 type RelayManager struct {
 	config          monitor.Config
 	relays          map[string]*StreamRelay
-	notificationMgr interface{} // Will be *notification.NotificationManager when imported
 	ctx             context.Context
 	cancel          context.CancelFunc
 	wg              sync.WaitGroup
 	mu              sync.RWMutex
+	logger          *logrus.Entry
 }
 
 // StreamRelay represents a single stream relay instance
 type StreamRelay struct {
-	config      monitor.RelayConfig
-	source      monitor.StreamSource
-	processes   map[string]*exec.Cmd
-	ctx         context.Context
-	cancel      context.CancelFunc
-	mu          sync.RWMutex
-	isRunning   bool
-	lastError   error
-	startTime   time.Time
+	config       monitor.RelayConfig
+	source       monitor.StreamSource
+	processes    map[string]*exec.Cmd
+	ctx          context.Context
+	cancel       context.CancelFunc
+	mu           sync.RWMutex
+	isRunning    bool
+	lastError    error
+	startTime    time.Time
 	restartCount int
+	logger       *logrus.Entry
 }
 
 // NewRelayManager creates a new relay manager
@@ -47,12 +49,13 @@ func NewRelayManager(configFile string) (*RelayManager, error) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	manager := &RelayManager{
 		config: config,
 		relays: make(map[string]*StreamRelay),
 		ctx:    ctx,
 		cancel: cancel,
+		logger: logger.GetLogger(map[string]interface{}{"component": "relay", "module": "manager"}),
 	}
 
 	// Initialize relay instances
@@ -63,7 +66,7 @@ func NewRelayManager(configFile string) (*RelayManager, error) {
 
 		relay, err := NewStreamRelay(relayConfig, ctx)
 		if err != nil {
-			log.Printf("Failed to create relay %s: %v", relayConfig.Name, err)
+			manager.logger.WithError(err).Errorf("Failed to create relay %s", relayConfig.Name)
 			continue
 		}
 
@@ -91,13 +94,17 @@ func NewStreamRelay(config monitor.RelayConfig, parentCtx context.Context) (*Str
 	}
 
 	ctx, cancel := context.WithCancel(parentCtx)
-	
+
 	return &StreamRelay{
 		config:    config,
 		source:    source,
 		processes: make(map[string]*exec.Cmd),
 		ctx:       ctx,
 		cancel:    cancel,
+		logger: logger.GetLogger(map[string]interface{}{
+			"component": "relay",
+			"module":    config.Name,
+		}),
 	}, nil
 }
 
@@ -107,7 +114,7 @@ func (rm *RelayManager) Run() error {
 		return fmt.Errorf("no relay configurations found")
 	}
 
-	log.Printf("Starting relay manager with %d relays", len(rm.relays))
+	rm.logger.Infof("Starting relay manager with %d relays", len(rm.relays))
 
 	// Start all relays
 	for name, relay := range rm.relays {
@@ -115,32 +122,32 @@ func (rm *RelayManager) Run() error {
 		go func(name string, relay *StreamRelay) {
 			defer rm.wg.Done()
 			if err := relay.Start(); err != nil {
-				log.Printf("Relay %s failed: %v", name, err)
+				rm.logger.WithError(err).WithField("relay_name", name).Error("Relay failed to start")
 			}
 		}(name, relay)
 	}
 
 	// Wait for context cancellation
 	<-rm.ctx.Done()
-	
+
 	// Stop all relays
 	rm.Stop()
-	
+
 	return nil
 }
 
 // Stop stops all relays
 func (rm *RelayManager) Stop() {
-	log.Println("Stopping relay manager...")
-	
+	rm.logger.Info("Stopping relay manager...")
+
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
-	
+
 	for name, relay := range rm.relays {
-		log.Printf("Stopping relay %s", name)
+		rm.logger.WithField("relay_name", name).Debug("Stopping relay")
 		relay.Stop()
 	}
-	
+
 	rm.cancel()
 	rm.wg.Wait()
 }
@@ -149,15 +156,18 @@ func (rm *RelayManager) Stop() {
 func (sr *StreamRelay) Start() error {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	if sr.isRunning {
 		return nil
 	}
-	
-	log.Printf("Starting relay %s", sr.config.Name)
+
+	sr.logger.WithFields(logrus.Fields{
+		"relay_name": sr.config.Name,
+		"quality":    sr.config.Quality,
+	}).Info("Starting relay")
 	sr.startTime = time.Now()
 	sr.isRunning = true
-	
+
 	// Main relay loop
 	for {
 		select {
@@ -165,10 +175,13 @@ func (sr *StreamRelay) Start() error {
 			return nil
 		default:
 			if err := sr.runRelay(); err != nil {
-				log.Printf("Relay %s error: %v", sr.config.Name, err)
+				sr.logger.WithError(err).WithFields(logrus.Fields{
+					"relay_name": sr.config.Name,
+					"restart_count": sr.restartCount,
+				}).Error("Relay error")
 				sr.lastError = err
 				sr.restartCount++
-				
+
 				// Wait before restart
 				select {
 				case <-sr.ctx.Done():
@@ -185,18 +198,23 @@ func (sr *StreamRelay) Start() error {
 func (sr *StreamRelay) runRelay() error {
 	// Check if source is live
 	if !sr.source.GetStatus() {
-		log.Printf("Relay %s: source is not live, waiting...", sr.config.Name)
+		sr.logger.WithField("relay_name", sr.config.Name).Debug("Source is not live, waiting...")
 		time.Sleep(10 * time.Second)
 		return nil
 	}
-	
+
 	// Get source stream URL
 	sourceURL := sr.source.GetPlayURL()
 	if sourceURL == "" {
 		return fmt.Errorf("failed to get source stream URL")
 	}
-	
-	log.Printf("Relay %s: got source URL: %s", sr.config.Name, sourceURL)
+
+	sr.logger.WithFields(logrus.Fields{
+		"relay_name":  sr.config.Name,
+		"source_url":  sourceURL,
+		"dest_count":  len(sr.config.Destinations),
+		"quality":     sr.config.Quality,
+	}).Info("Got source URL, starting relay processes")
 	
 	// Start relay processes for each destination
 	var wg sync.WaitGroup
@@ -236,28 +254,34 @@ func (sr *StreamRelay) runRelay() error {
 func (sr *StreamRelay) startRelayProcess(sourceURL string, dest monitor.Destination) error {
 	// Build FFmpeg command
 	args := sr.buildFFmpegArgs(sourceURL, dest)
-	
+
 	cmd := exec.CommandContext(sr.ctx, "ffmpeg", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	
-	log.Printf("Starting relay to %s: ffmpeg %s", dest.Name, strings.Join(args, " "))
-	
+
+	sr.logger.WithFields(logrus.Fields{
+		"relay_name": sr.config.Name,
+		"dest_name":  dest.Name,
+		"dest_url":   dest.URL,
+		"protocol":   dest.Protocol,
+		"args":       strings.Join(args, " "),
+	}).Debug("Starting relay process")
+
 	// Store process for cleanup
 	sr.mu.Lock()
 	sr.processes[dest.Name] = cmd
 	sr.mu.Unlock()
-	
+
 	// Start process
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start ffmpeg: %w", err)
 	}
-	
+
 	// Wait for process to complete
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("ffmpeg process failed: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -298,14 +322,16 @@ func (sr *StreamRelay) buildFFmpegArgs(sourceURL string, dest monitor.Destinatio
 func (sr *StreamRelay) stopAllProcesses() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	for name, cmd := range sr.processes {
 		if cmd != nil && cmd.Process != nil {
-			log.Printf("Stopping relay process for %s", name)
-			cmd.Process.Kill()
+			sr.logger.WithField("process_name", name).Debug("Stopping relay process")
+			if err := cmd.Process.Kill(); err != nil {
+				sr.logger.WithError(err).WithField("process_name", name).Warn("Failed to kill process")
+			}
 		}
 	}
-	
+
 	// Clear processes map
 	sr.processes = make(map[string]*exec.Cmd)
 }
@@ -314,12 +340,12 @@ func (sr *StreamRelay) stopAllProcesses() {
 func (sr *StreamRelay) Stop() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	if !sr.isRunning {
 		return
 	}
-	
-	log.Printf("Stopping relay %s", sr.config.Name)
+
+	sr.logger.WithField("relay_name", sr.config.Name).Info("Stopping relay")
 	sr.isRunning = false
 	sr.cancel()
 	sr.stopAllProcesses()
@@ -353,20 +379,20 @@ type RelayStatus struct {
 // loadConfig loads configuration from JSON file
 func loadConfig(configFile string) (monitor.Config, error) {
 	var config monitor.Config
-	
+
 	// Set default values
 	config.Interval = "30s"
 	config.Verbose = false
 
 	if configFile == "" {
-		log.Println("No config file specified, using default configuration")
+		logger.DefaultWrapper.Println("No config file specified, using default configuration")
 		return config, nil
 	}
 
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("Config file %s not found, using default configuration", configFile)
+			logger.DefaultWrapper.Printf("Config file %s not found, using default configuration", configFile)
 			return config, nil
 		}
 		return config, err

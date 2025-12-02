@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -33,7 +32,7 @@ func TestLoadConfig(t *testing.T) {
 		data, err := json.Marshal(configData)
 		require.NoError(t, err)
 
-		tmpFile, err := ioutil.TempFile("", "test-config-*.json")
+		tmpFile, err := os.CreateTemp("", "test-config-*.json")
 		require.NoError(t, err)
 		defer os.Remove(tmpFile.Name())
 
@@ -53,7 +52,7 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		tmpFile, err := ioutil.TempFile("", "test-config-*.json")
+		tmpFile, err := os.CreateTemp("", "test-config-*.json")
 		require.NoError(t, err)
 		defer os.Remove(tmpFile.Name())
 
@@ -88,7 +87,7 @@ func TestNewMonitor(t *testing.T) {
 		data, err := json.Marshal(configData)
 		require.NoError(t, err)
 
-		tmpFile, err := ioutil.TempFile("", "test-config-*.json")
+		tmpFile, err := os.CreateTemp("", "test-config-*.json")
 		require.NoError(t, err)
 		defer os.Remove(tmpFile.Name())
 
@@ -114,7 +113,7 @@ func TestNewMonitor(t *testing.T) {
 		data, err := json.Marshal(configData)
 		require.NoError(t, err)
 
-		tmpFile, err := ioutil.TempFile("", "test-config-*.json")
+		tmpFile, err := os.CreateTemp("", "test-config-*.json")
 		require.NoError(t, err)
 		defer os.Remove(tmpFile.Name())
 
@@ -142,7 +141,7 @@ func TestMonitor_RunAndStop(t *testing.T) {
 	data, err := json.Marshal(configData)
 	require.NoError(t, err)
 
-	tmpFile, err := ioutil.TempFile("", "test-config-*.json")
+	tmpFile, err := os.CreateTemp("", "test-config-*.json")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
@@ -184,7 +183,7 @@ func TestMonitor_RunWithNoSources(t *testing.T) {
 	data, err := json.Marshal(configData)
 	require.NoError(t, err)
 
-	tmpFile, err := ioutil.TempFile("", "test-config-*.json")
+	tmpFile, err := os.CreateTemp("", "test-config-*.json")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 

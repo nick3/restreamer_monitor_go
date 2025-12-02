@@ -3,7 +3,6 @@ package relay
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -45,7 +44,7 @@ func TestLoadConfig(t *testing.T) {
 		data, err := json.Marshal(configData)
 		require.NoError(t, err)
 
-		tmpFile, err := ioutil.TempFile("", "test-relay-config-*.json")
+		tmpFile, err := os.CreateTemp("", "test-relay-config-*.json")
 		require.NoError(t, err)
 		defer os.Remove(tmpFile.Name())
 
@@ -180,7 +179,7 @@ func TestNewRelayManager(t *testing.T) {
 		data, err := json.Marshal(configData)
 		require.NoError(t, err)
 
-		tmpFile, err := ioutil.TempFile("", "test-relay-config-*.json")
+		tmpFile, err := os.CreateTemp("", "test-relay-config-*.json")
 		require.NoError(t, err)
 		defer os.Remove(tmpFile.Name())
 
@@ -221,7 +220,7 @@ func TestNewRelayManager(t *testing.T) {
 		data, err := json.Marshal(configData)
 		require.NoError(t, err)
 
-		tmpFile, err := ioutil.TempFile("", "test-relay-config-*.json")
+		tmpFile, err := os.CreateTemp("", "test-relay-config-*.json")
 		require.NoError(t, err)
 		defer os.Remove(tmpFile.Name())
 
@@ -348,7 +347,7 @@ func TestRelayManager_RunWithNoRelays(t *testing.T) {
 	data, err := json.Marshal(configData)
 	require.NoError(t, err)
 
-	tmpFile, err := ioutil.TempFile("", "test-relay-config-*.json")
+	tmpFile, err := os.CreateTemp("", "test-relay-config-*.json")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 

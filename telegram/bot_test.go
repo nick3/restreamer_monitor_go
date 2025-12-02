@@ -81,9 +81,8 @@ func TestBot_FormatNotification(t *testing.T) {
 
 		result := bot.formatNotification(event)
 		assert.Contains(t, result, "Room status changed")
-		assert.Contains(t, result, "room_id: `123`")
-		assert.Contains(t, result, "platform: `bilibili`")
-		assert.Contains(t, result, "status: `live`")
+		// Note: Data fields are no longer included in formatted output to avoid Markdown parsing errors
+		// The message content should contain all necessary information for the user
 	})
 }
 

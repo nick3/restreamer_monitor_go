@@ -1,0 +1,123 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # 触发条件：推送以 v 开头的 tag，例如 v1.0.0
+
+permissions:
+  contents: write # 需要写权限来创建 Release
+
+jobs:
+  release:
+    name: Release on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            suffix: ""
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            suffix: ""
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            suffix: ".exe"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Build binary for ${{ matrix.goos }}/${{ matrix.goarch }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        shell: bash
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
+          GIT_COMMIT=${GITHUB_SHA::7}
+          GO_VERSION=$(go version | cut -d ' ' -f 3)
+
+          LDFLAGS="-X 'main.Version=${VERSION}' \
+                   -X 'main.BuildTime=${BUILD_TIME}' \
+                   -X 'main.GitCommit=${GIT_COMMIT}' \
+                   -X 'main.GoVersion=${GO_VERSION}' \
+                   -w -s"
+
+          mkdir -p bin
+          OUTPUT_NAME="RestreamerMonitor_${{ matrix.goos }}${{ matrix.suffix }}"
+          go build -trimpath -ldflags "${LDFLAGS}" -o "bin/${OUTPUT_NAME}" ./main/main.go
+
+          # 压缩二进制文件（可选，减少体积）
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            powershell Compress-Archive -Path "bin/${OUTPUT_NAME}" -DestinationPath "bin/${OUTPUT_NAME%.exe}.zip"
+          else
+            tar -czf "bin/${OUTPUT_NAME}.tar.gz" -C bin "${OUTPUT_NAME}"
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: bin/*
+          retention-days: 1
+
+  create-release:
+    name: Create GitHub Release
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize artifacts
+        run: |
+          mkdir -p release-files
+          find artifacts -type f -name "*.tar.gz" -o -name "*.zip" | while read file; do
+            cp "$file" release-files/
+          done
+          ls -la release-files/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

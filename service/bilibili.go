@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -11,12 +10,15 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/nick3/restreamer_monitor_go/logger"
+	"github.com/sirupsen/logrus"
 )
 
 // BilibiliService provides access to Bilibili live streaming API
 type BilibiliService struct {
 	RoomId string
 	Client *resty.Client
+	logger *logrus.Entry
 }
 
 const (
@@ -65,10 +67,15 @@ func NewBilibiliService(roomId string) (*BilibiliService, error) {
 		SetTimeout(requestTimeout).
 		SetRetryCount(maxRetryCount).
 		SetRetryWaitTime(retryWaitTime)
-		
+
 	return &BilibiliService{
 		Client: client,
 		RoomId: roomId,
+		logger: logger.GetLogger(map[string]interface{}{
+			"component": "service",
+			"platform":  "bilibili",
+			"room_id":   roomId,
+		}),
 	}, nil
 }
 
@@ -101,7 +108,7 @@ func (b *BilibiliService) GetBilibiliRealRoomId() (string, error) {
 	}
 
 	if data.Msg == "直播间不存在" {
-		log.Printf("Room %s does not exist", b.RoomId)
+		b.logger.WithField("room_id", b.RoomId).Warn("Room does not exist")
 		return "", fmt.Errorf("room %s does not exist", b.RoomId)
 	}
 	
@@ -137,7 +144,7 @@ func (b *BilibiliService) GetBilibiliLiveStatus() (bool, error) {
 	}
 
 	if data.Msg == "直播间不存在" {
-		log.Printf("Room %s does not exist", b.RoomId)
+		b.logger.WithField("room_id", b.RoomId).Warn("Room does not exist")
 		return false, fmt.Errorf("room %s does not exist", b.RoomId)
 	}
 	
@@ -146,10 +153,141 @@ func (b *BilibiliService) GetBilibiliLiveStatus() (bool, error) {
 	if isLive {
 		status = "live"
 	}
-	log.Printf("Room %s status: %s", b.RoomId, status)
+	b.logger.WithFields(logrus.Fields{
+		"room_id": b.RoomId,
+		"status":  status,
+	}).Info("Room status check completed")
 	return isLive, nil
 }
 
+
+// GetRoomBaseInfo retrieves the base information of the room and anchor
+// This matches the bilicaptain library implementation
+func (b *BilibiliService) GetRoomBaseInfo() (*struct {
+	UID   string `json:"uid"`
+	UName string `json:"uname"`
+}, error) {
+	resp, err := b.Client.R().
+		SetQueryParams(map[string]string{
+			"room_ids": b.RoomId,
+			"req_biz":  "space",
+		}).
+		Get("xlive/web-room/v1/index/getRoomBaseInfo")
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get room base info: %w", err)
+	}
+
+	var data struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			ByRoomIds map[string]struct {
+				UID       int    `json:"uid"`
+				Uname     string `json:"uname"`
+				Title     string `json:"title"`
+				Cover     string `json:"cover"`
+				LiveStart int64  `json:"live_start"`
+			} `json:"by_room_ids"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(resp.Body(), &data); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if data.Code != 0 {
+		return nil, fmt.Errorf("API error (code %d): %s", data.Code, data.Msg)
+	}
+
+	// Get the room data from by_room_ids map using room_id as key
+	// Note: The key might be the real room ID, not the short ID
+	roomInfo, exists := data.Data.ByRoomIds[b.RoomId]
+	if !exists {
+		// Try each key in the map to find a match
+		for key, roomData := range data.Data.ByRoomIds {
+			b.logger.WithFields(logrus.Fields{
+				"found_id":    key,
+				"searching_id": b.RoomId,
+			}).Debug("Found room in response")
+			roomInfo = roomData
+			exists = true
+			break
+		}
+	}
+
+	if !exists || roomInfo.UID == 0 {
+		return nil, fmt.Errorf("room %s not found in API response", b.RoomId)
+	}
+
+	return &struct {
+		UID   string `json:"uid"`
+		UName string `json:"uname"`
+	}{
+		UID:   strconv.Itoa(roomInfo.UID),
+		UName: roomInfo.Uname,
+	}, nil
+}
+
+// GetRoomInfo retrieves detailed room information
+func (b *BilibiliService) GetRoomInfo() (*struct {
+	Title     string    `json:"title"`
+	UserCover string    `json:"user_cover"`
+	Keyframe  string    `json:"keyframe"`
+	LiveStart time.Time `json:"live_start"`
+}, error) {
+	resp, err := b.Client.R().
+		SetQueryParams(map[string]string{
+			"room_id": b.RoomId,
+		}).
+		Get("room/v1/Room/get_info")
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get room info: %w", err)
+	}
+
+	var data struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			Title     string `json:"title"`
+			UserCover string `json:"user_cover"`
+			Keyframe  string `json:"keyframe"`
+			LiveTime  string `json:"live_time"` // Format: "YYYY-MM-DD HH:mm:ss"
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(resp.Body(), &data); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if data.Code != 0 {
+		return nil, fmt.Errorf("API error (code %d): %s", data.Code, data.Msg)
+	}
+
+	// Parse live start time
+	var liveStart time.Time
+	if data.Data.LiveTime != "" && data.Data.LiveTime != "0000-00-00 00:00:00" {
+		parsedTime, err := time.Parse("2006-01-02 15:04:05", data.Data.LiveTime)
+		if err != nil {
+			b.logger.WithError(err).WithField("live_time", data.Data.LiveTime).Warn("Failed to parse live time")
+		} else {
+			liveStart = parsedTime
+		}
+	}
+
+	return &struct {
+		Title     string    `json:"title"`
+		UserCover string    `json:"user_cover"`
+		Keyframe  string    `json:"keyframe"`
+		LiveStart time.Time `json:"live_start"`
+	}{
+		Title:     data.Data.Title,
+		UserCover: data.Data.UserCover,
+		Keyframe:  data.Data.Keyframe,
+		LiveStart: liveStart,
+	}, nil
+}
 
 // GetBilibiliLiveRealURL retrieves the real live stream URLs
 func (b *BilibiliService) GetBilibiliLiveRealURL(realRoomId string) ([]string, error) {
@@ -161,7 +299,7 @@ func (b *BilibiliService) GetBilibiliLiveRealURL(realRoomId string) ([]string, e
 	processURL := func(urlStr string) string {
 		u, err := url.Parse(urlStr)
 		if err != nil {
-			log.Printf("Failed to parse URL %s: %v", urlStr, err)
+			b.logger.WithError(err).WithField("url", urlStr).Warn("Failed to parse URL")
 			return urlStr
 		}
 		pathParts := strings.Split(u.Path, "/")
@@ -208,7 +346,10 @@ func (b *BilibiliService) GetBilibiliLiveRealURL(realRoomId string) ([]string, e
 	}
 
 	if playData.Code != 0 {
-		log.Printf("Play URL API returned error (code %d): %s", playData.Code, playData.Msg)
+		b.logger.WithFields(logrus.Fields{
+			"code": playData.Code,
+			"msg":  playData.Msg,
+		}).Warn("Play URL API returned error")
 	} else if len(playData.Data.Durl) > 0 {
 		url1 := processURL(playData.Data.Durl[0].URL)
 		url2 := playData.Data.Durl[0].URL
@@ -248,7 +389,10 @@ func (b *BilibiliService) GetBilibiliLiveRealURL(realRoomId string) ([]string, e
 	}
 
 	if err := json.Unmarshal(resp.Body(), &roomData); err != nil {
-		log.Printf("Failed to parse room play info response, response length: %d", len(resp.Body()))
+		b.logger.WithFields(logrus.Fields{
+			"error":           err,
+			"response_length": len(resp.Body()),
+		}).Error("Failed to parse room play info response")
 		return nil, fmt.Errorf("failed to parse room play info response: %w", err)
 	}
 
