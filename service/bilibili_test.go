@@ -87,7 +87,7 @@ func TestBilibiliService_GetBilibiliLiveStatus(t *testing.T) {
 
 // TestGetRoomBaseInfo tests the GetRoomBaseInfo method
 func TestGetRoomBaseInfo(t *testing.T) {
-	// Test with Bilibili's official直播间
+	// Test with Bilibili's official live room
 	roomID := "3"
 
 	svc, err := NewBilibiliService(roomID)
