@@ -59,6 +59,79 @@ make build-all
 GOOS=linux GOARCH=amd64 go build -o bin/RestreamerMonitor_linux ./main/main.go
 ```
 
+#### Docker 部署
+
+推荐使用 Docker 部署，支持 amd64 和 arm64 架构。
+
+**拉取镜像：**
+
+```bash
+# 拉取最新版本
+docker pull ghcr.io/nick3/restreamer_monitor_go:latest
+
+# 拉取指定版本
+docker pull ghcr.io/nick3/restreamer_monitor_go:v1.0.0
+```
+
+**准备配置文件：**
+
+在本地创建配置文件 `config.json`（参考下方配置文件示例）。
+
+**运行容器：**
+
+```bash
+# 监控模式
+docker run -d \
+  --name restreamer-monitor \
+  -v $(pwd)/config.json:/app/config/config.json:ro \
+  ghcr.io/nick3/restreamer_monitor_go:latest \
+  monitor -c /app/config/config.json -v
+
+# 转播模式
+docker run -d \
+  --name restreamer-relay \
+  -v $(pwd)/config.json:/app/config/config.json:ro \
+  ghcr.io/nick3/restreamer_monitor_go:latest \
+  relay -c /app/config/config.json -v
+```
+
+**使用 Docker Compose：**
+
+创建 `docker-compose.yml` 文件：
+
+```yaml
+version: '3.8'
+
+services:
+  restreamer-monitor:
+    image: ghcr.io/nick3/restreamer_monitor_go:latest
+    container_name: restreamer-monitor
+    restart: unless-stopped
+    volumes:
+      - ./config.json:/app/config/config.json:ro
+    command: ["monitor", "-c", "/app/config/config.json", "-v"]
+```
+
+启动服务：
+
+```bash
+docker-compose up -d
+```
+
+**本地构建镜像：**
+
+```bash
+# 构建镜像
+docker build -t restreamer-monitor .
+
+# 运行本地构建的镜像
+docker run -d \
+  --name restreamer-monitor \
+  -v $(pwd)/config.json:/app/config/config.json:ro \
+  restreamer-monitor \
+  monitor -c /app/config/config.json -v
+```
+
 ### 使用方法
 
 #### 基本命令
@@ -315,6 +388,79 @@ make build-all
 
 # Build for specific platform
 GOOS=linux GOARCH=amd64 go build -o bin/RestreamerMonitor_linux ./main/main.go
+```
+
+#### Docker Deployment
+
+Docker deployment is recommended, supporting both amd64 and arm64 architectures.
+
+**Pull the image:**
+
+```bash
+# Pull latest version
+docker pull ghcr.io/nick3/restreamer_monitor_go:latest
+
+# Pull specific version
+docker pull ghcr.io/nick3/restreamer_monitor_go:v1.0.0
+```
+
+**Prepare configuration file:**
+
+Create a local `config.json` configuration file (refer to the configuration file example below).
+
+**Run the container:**
+
+```bash
+# Monitor mode
+docker run -d \
+  --name restreamer-monitor \
+  -v $(pwd)/config.json:/app/config/config.json:ro \
+  ghcr.io/nick3/restreamer_monitor_go:latest \
+  monitor -c /app/config/config.json -v
+
+# Relay mode
+docker run -d \
+  --name restreamer-relay \
+  -v $(pwd)/config.json:/app/config/config.json:ro \
+  ghcr.io/nick3/restreamer_monitor_go:latest \
+  relay -c /app/config/config.json -v
+```
+
+**Using Docker Compose:**
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: '3.8'
+
+services:
+  restreamer-monitor:
+    image: ghcr.io/nick3/restreamer_monitor_go:latest
+    container_name: restreamer-monitor
+    restart: unless-stopped
+    volumes:
+      - ./config.json:/app/config/config.json:ro
+    command: ["monitor", "-c", "/app/config/config.json", "-v"]
+```
+
+Start the service:
+
+```bash
+docker-compose up -d
+```
+
+**Build image locally:**
+
+```bash
+# Build image
+docker build -t restreamer-monitor .
+
+# Run locally built image
+docker run -d \
+  --name restreamer-monitor \
+  -v $(pwd)/config.json:/app/config/config.json:ro \
+  restreamer-monitor \
+  monitor -c /app/config/config.json -v
 ```
 
 ### Usage
