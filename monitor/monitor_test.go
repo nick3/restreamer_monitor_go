@@ -129,7 +129,7 @@ func TestNewMonitor(t *testing.T) {
 }
 
 func TestMonitor_RunAndStop(t *testing.T) {
-	t.Skip("Skipping flaky test - monitor Stop() may timeout if network calls are slow")
+	t.Skip("Skipping flaky test - monitor Stop() times out due to blocking network calls that don't respect context cancellation. Re-enable after implementing proper context handling in GetStatus()")
 	
 	// Create a monitor with minimal config
 	configData := Config{
@@ -170,7 +170,7 @@ func TestMonitor_RunAndStop(t *testing.T) {
 	select {
 	case err := <-done:
 		assert.NoError(t, err)
-	case <-time.After(3 * time.Second):
+	case <-time.After(time.Second):
 		t.Fatal("Monitor did not stop within timeout")
 	}
 }
